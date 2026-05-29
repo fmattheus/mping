@@ -1,6 +1,6 @@
-module mping
+module github.com/fmattheus/mping
 
-go 1.26.3
+go 1.25.0
 
 require (
 	github.com/fatih/color v1.19.0
