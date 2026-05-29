@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -38,6 +39,21 @@ func (s *secDuration) Set(val string) error {
 	}
 	*s = secDuration(d)
 	return nil
+}
+
+var permWarnOnce sync.Once
+
+func isPermissionError(err error) bool {
+	s := err.Error()
+	return strings.Contains(s, "operation not permitted") ||
+		strings.Contains(s, "permission denied")
+}
+
+func warnPermission() {
+	permWarnOnce.Do(func() {
+		fmt.Fprintln(os.Stderr, "\nNote: ICMP socket permission denied — unprivileged ping is not allowed.")
+		fmt.Fprintln(os.Stderr, "See https://github.com/fmattheus/mping#linux for setup instructions.\n")
+	})
 }
 
 type PingResult struct {
@@ -92,6 +108,9 @@ func pingHost(host string, timeout time.Duration) PingResult {
 	pinger.Timeout = timeout
 	pinger.SetPrivileged(false)
 	if err := pinger.Run(); err != nil {
+		if isPermissionError(err) {
+			warnPermission()
+		}
 		return PingResult{Host: host, Err: err}
 	}
 	stats := pinger.Statistics()
