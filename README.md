@@ -79,6 +79,36 @@ mping --theme colorblind google.com 1.1.1.1
 mping -T mono google.com 1.1.1.1
 ```
 
+## Configuration
+
+Default values can be set in a config file. CLI flags always override the config file.
+
+**Location:**
+| OS | Path |
+|----|------|
+| Linux | `~/.config/mping/config` |
+| macOS | `~/Library/Application Support/mping/config` |
+| Windows | `%AppData%\mping\config` |
+
+**Format** — `key = value`, lines starting with `#` are comments:
+
+```
+# mping configuration
+interval = 5
+timeout = 4.5
+theme = default
+```
+
+**Keys:**
+
+| Key | Description |
+|-----|-------------|
+| `interval` | Seconds between ping cycles |
+| `timeout` | Per-ping timeout in seconds (omit to use 90% of interval) |
+| `theme` | Output theme: `default`, `symbols`, `colorblind`, `mono` |
+
+The file is optional — missing keys fall back to built-in defaults.
+
 ## Platform notes
 
 ### Linux

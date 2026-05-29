@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,37 @@ func (s *secDuration) Set(val string) error {
 	}
 	*s = secDuration(d)
 	return nil
+}
+
+type fileConfig struct {
+	interval, timeout, theme string
+}
+
+func loadConfig(path string) fileConfig {
+	var cfg fileConfig
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return cfg
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		switch strings.TrimSpace(k) {
+		case "interval":
+			cfg.interval = strings.TrimSpace(v)
+		case "timeout":
+			cfg.timeout = strings.TrimSpace(v)
+		case "theme":
+			cfg.theme = strings.TrimSpace(v)
+		}
+	}
+	return cfg
 }
 
 var permWarnOnce sync.Once
@@ -148,9 +180,27 @@ func renderCycle(results []PingResult, t time.Time, theme themeConfig) {
 }
 
 func main() {
+	cfgDir, _ := os.UserConfigDir()
+	cfg := loadConfig(filepath.Join(cfgDir, "mping", "config"))
+
 	var interval secDuration = secDuration(5 * time.Second)
+	if cfg.interval != "" {
+		interval.Set(cfg.interval)
+	}
+
 	var timeout secDuration
-	var themeName string
+	var timeoutFromConfig bool
+	if cfg.timeout != "" {
+		if err := timeout.Set(cfg.timeout); err == nil {
+			timeoutFromConfig = true
+		}
+	}
+
+	themeDefault := "default"
+	if cfg.theme != "" {
+		themeDefault = cfg.theme
+	}
+	var themeName string = themeDefault
 
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: mping [flags] host [host ...]")
@@ -166,8 +216,8 @@ func main() {
 	flag.Var(&interval, "i", "")
 	flag.Var(&timeout, "timeout", "per-ping timeout in seconds")
 	flag.Var(&timeout, "t", "")
-	flag.StringVar(&themeName, "theme", "default", "output theme")
-	flag.StringVar(&themeName, "T", "default", "")
+	flag.StringVar(&themeName, "theme", themeDefault, "output theme")
+	flag.StringVar(&themeName, "T", themeDefault, "")
 	flag.Parse()
 
 	theme, ok := themes[themeName]
@@ -176,13 +226,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	var timeoutSet bool
+	var timeoutSetByCLI bool
 	flag.Visit(func(f *flag.Flag) {
 		if f.Name == "timeout" || f.Name == "t" {
-			timeoutSet = true
+			timeoutSetByCLI = true
 		}
 	})
-	if !timeoutSet {
+	if !timeoutSetByCLI && !timeoutFromConfig {
 		timeout = secDuration(float64(interval) * 0.9)
 	}
 
