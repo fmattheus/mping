@@ -99,7 +99,7 @@ var themes = map[string]themeConfig{
 	},
 }
 
-func pingHost(host string, timeout time.Duration) PingResult {
+func pingHost(ctx context.Context, host string, timeout time.Duration) PingResult {
 	pinger, err := probing.NewPinger(host)
 	if err != nil {
 		return PingResult{Host: host, Err: err}
@@ -107,7 +107,7 @@ func pingHost(host string, timeout time.Duration) PingResult {
 	pinger.Count = 1
 	pinger.Timeout = timeout
 	pinger.SetPrivileged(false)
-	if err := pinger.Run(); err != nil {
+	if err := pinger.RunWithContext(ctx); err != nil {
 		if isPermissionError(err) {
 			warnPermission()
 		}
@@ -120,14 +120,14 @@ func pingHost(host string, timeout time.Duration) PingResult {
 	return PingResult{Host: host}
 }
 
-func runCycle(hosts []string, timeout time.Duration) []PingResult {
+func runCycle(ctx context.Context, hosts []string, timeout time.Duration) []PingResult {
 	results := make([]PingResult, len(hosts))
 	var wg sync.WaitGroup
 	for i, host := range hosts {
 		wg.Add(1)
 		go func(idx int, h string) {
 			defer wg.Done()
-			results[idx] = pingHost(h, timeout)
+			results[idx] = pingHost(ctx, h, timeout)
 		}(i, host)
 	}
 	wg.Wait()
@@ -202,8 +202,10 @@ func main() {
 	defer ticker.Stop()
 
 	t := time.Now()
-	results := runCycle(hosts, timeoutDur)
-	renderCycle(results, t, theme)
+	results := runCycle(ctx, hosts, timeoutDur)
+	if ctx.Err() == nil {
+		renderCycle(results, t, theme)
+	}
 
 	for {
 		select {
@@ -211,8 +213,10 @@ func main() {
 			return
 		case <-ticker.C:
 			t := time.Now()
-			results := runCycle(hosts, timeoutDur)
-			renderCycle(results, t, theme)
+			results := runCycle(ctx, hosts, timeoutDur)
+			if ctx.Err() == nil {
+				renderCycle(results, t, theme)
+			}
 		}
 	}
 }
